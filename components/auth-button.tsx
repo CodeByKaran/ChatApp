@@ -11,9 +11,15 @@ export async function AuthButton() {
 
   const user = data?.claims;
 
+  const ellipsedEmailOnly6 = user?.email ? user.email.split("@")[0] : "User";
+
   return user ? (
-    <div className="flex items-center gap-4">
-      Hey, {user.email}!
+    <div className="flex items-center gap-2">
+      Hey,{" "}
+      {ellipsedEmailOnly6.length > 6
+        ? `${ellipsedEmailOnly6.slice(0, 6)}...`
+        : ellipsedEmailOnly6}
+      <span className="text-green-500 text-xs">●</span>
       <LogoutButton />
     </div>
   ) : (

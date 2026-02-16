@@ -1,9 +1,8 @@
-import { DeployButton } from "@/components/deploy-button";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { hasEnvVars } from "@/lib/utils";
-import Link from "next/link";
+
 import { Suspense } from "react";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 
@@ -22,7 +21,7 @@ export default function ProtectedLayout({
         maxOpacity={0.5}
         flickerChance={0.1}
       />
-      <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 z-10 bg-background/80 backdrop-blur-sm sticky top-0">
+      <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
           <div className="flex gap-5 items-center font-semibold">
             <h1 className="text-xl">

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 export default function ProtectedPage() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8">

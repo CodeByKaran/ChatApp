@@ -71,10 +71,11 @@ export default function ClientRoomChat({ roomId }: Props) {
           },
           (payload) => {
             setMessages((prev) => {
-              if (prev.some((msg) => msg.id === payload.new.id)) {
+              const newMessage = payload.new as Message;
+              if (prev.some((msg) => msg.id === newMessage.id)) {
                 return prev;
               }
-              return [...prev, payload.new];
+              return [...prev, newMessage];
             });
           }
         )

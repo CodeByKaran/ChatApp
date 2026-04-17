@@ -12,13 +12,13 @@ interface UserProfile {
 }
 
 export default function LeftSidebar() {
-  const supabase = createClient();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
+        const supabase = createClient();
         const { data: user } = await supabase.auth.getUser();
         if (user?.user?.email) {
           const { data } = await supabase
@@ -40,9 +40,10 @@ export default function LeftSidebar() {
     };
 
     fetchUserProfile();
-  }, [supabase]);
+  }, []);
 
   const handleLogout = async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/auth/login";
   };

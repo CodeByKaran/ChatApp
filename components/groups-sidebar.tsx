@@ -26,7 +26,6 @@ interface Room {
 }
 
 export default function GroupsSidebar() {
-  const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -38,6 +37,7 @@ export default function GroupsSidebar() {
   const currentRoomId = pathname?.split("/").pop();
 
   const fetchRooms = async () => {
+    const supabase = createClient();
     try {
       const session = await supabase.auth.getSession();
       const userId = session.data?.session?.user.id;
@@ -61,10 +61,11 @@ export default function GroupsSidebar() {
 
   useEffect(() => {
     fetchRooms();
-  }, [supabase]);
+  }, []);
 
   const handleCreateRoom = async (roomName: string) => {
     try {
+      const supabase = createClient();
       const { error, data } = await supabase
         .from("rooms")
         .insert({ room_name: roomName })
@@ -91,6 +92,7 @@ export default function GroupsSidebar() {
 
   const handleJoinRoom = async (roomId: string) => {
     try {
+      const supabase = createClient();
       const isAlreadyJoined = rooms.some((room) => room.room_id === roomId);
       if (isAlreadyJoined) {
         router.push(`/protected/${roomId}`);

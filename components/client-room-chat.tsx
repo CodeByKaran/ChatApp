@@ -1,19 +1,30 @@
 "use client";
-import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
-import RoomUtils from "./room-utils";
+import ChatHeader from "./chat-header";
+import { Send } from "lucide-react";
 
 interface Props {
   roomId: string;
 }
 
+interface Message {
+  id: string;
+  content: string;
+  username: string;
+  created_at: string;
+  isSending?: boolean;
+}
+
 export default function ClientRoomChat({ roomId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     const { data, error } = await supabase
@@ -25,26 +36,23 @@ export default function ClientRoomChat({ roomId }: Props) {
     if (error) {
       console.error("Error fetching messages:", error);
     } else {
-      console.log("messages ", data);
-
       setMessages(data || []);
     }
   }, [roomId, supabase]);
 
-  // Separate effect for fetching messages on room change
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Separate effect for realtime subscription
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   useEffect(() => {
     let retryTimeout: NodeJS.Timeout;
     let isActive = true;
 
-    console.log("Setting up realtime connection for room:", roomId);
-
     const setupRealtime = () => {
-      // Create a unique channel name
       const channel = supabase.channel(`room-${roomId}-${Date.now()}`, {
         config: {
           broadcast: { ack: false, self: true },
@@ -52,11 +60,7 @@ export default function ClientRoomChat({ roomId }: Props) {
         },
       });
 
-      // Handle channel events
       channel
-        .on("system", { event: "*" }, (payload) => {
-          console.log("System event:", payload);
-        })
         .on(
           "postgres_changes",
           {
@@ -66,62 +70,38 @@ export default function ClientRoomChat({ roomId }: Props) {
             filter: `room_id=eq.${roomId}`,
           },
           (payload) => {
-            console.log("New message via realtime:", payload);
             setMessages((prev) => {
-              // Avoid duplicates
               if (prev.some((msg) => msg.id === payload.new.id)) {
                 return prev;
               }
               return [...prev, payload.new];
             });
-          },
+          }
         )
         .subscribe((status, err) => {
-          console.log(`Realtime status for ${roomId}:`, status, err);
-
           if (!isActive) return;
 
           if (status === "SUBSCRIBED") {
-            console.log("✅ Successfully connected to room:", roomId);
             setIsConnected(true);
-          } else if (status === "CHANNEL_ERROR") {
-            console.error("❌ Channel error:", err);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             setIsConnected(false);
 
-            // Try to reconnect after delay
             if (isActive) {
               retryTimeout = setTimeout(() => {
-                console.log("Attempting to reconnect...");
-                setupRealtime();
-              }, 5000);
-            }
-          } else if (status === "TIMED_OUT") {
-            console.log("⏰ Connection timeout");
-            setIsConnected(false);
-
-            // Try to reconnect after delay
-            if (isActive) {
-              retryTimeout = setTimeout(() => {
-                console.log("Attempting to reconnect after timeout...");
                 setupRealtime();
               }, 5000);
             }
           } else if (status === "CLOSED") {
-            console.log("🔌 Connection closed");
             setIsConnected(false);
           }
         });
 
-      // Return cleanup function for this specific channel attempt
       return channel;
     };
 
-    // Start the connection
     const channel = setupRealtime();
 
-    // Cleanup function
     return () => {
-      console.log("Cleaning up realtime connection for room:", roomId);
       isActive = false;
       clearTimeout(retryTimeout);
 
@@ -135,98 +115,111 @@ export default function ClientRoomChat({ roomId }: Props) {
     const message = inputRef.current?.value;
     if (!message?.trim()) return;
 
-    const { data: user } = await supabase.auth.getUser();
+    setIsSending(true);
 
-    const userEmail = user.user?.email;
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      const userEmail = user.user?.email;
 
-    const { data } = await supabase
-      .from("profile")
-      .select("username")
-      .eq("email", userEmail)
-      .single();
+      const { data } = await supabase
+        .from("profile")
+        .select("username")
+        .eq("email", userEmail)
+        .single();
 
-    // Optimistically add message
-    // const tempId = Date.now();
-    // setMessages((prev) => [
-    //   ...prev,
-    //   {
-    //     id: tempId,
-    //     content: message.trim(),
-    //     created_at: new Date().toISOString(),
-    //     room_id: roomId,
-    //     isSending: true,
-    //   },
-    // ]);
+      await supabase
+        .from("messages")
+        .insert({
+          room_id: roomId,
+          content: message.trim(),
+          username: data?.username,
+        })
+        .select()
+        .single();
 
-    const { error } = await supabase
-      .from("messages")
-      .insert({
-        room_id: roomId,
-        content: message.trim(),
-        username: data?.username,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error sending:", error);
-      // Remove optimistic message on error
-      // setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
-    } else {
       inputRef.current!.value = "";
+    } catch (error) {
+      console.error("Error sending:", error);
+    } finally {
+      setIsSending(false);
     }
   };
 
   return (
-    <div className="text-center p-8 max-w-2xl mx-auto bg-background/80 backdrop-blur-lg rounded-lg border">
-      <p className="mb-4">
-        Room ID: <strong>{roomId}</strong>
-        <span
-          className={`ml-2 px-2 py-1 rounded text-xs ${
-            isConnected
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          }`}
-        >
-          {isConnected ? "🟢 Live" : "🔴 Disconnected"}
-        </span>
-      </p>
-      <RoomUtils />
+    <div className="flex flex-col h-screen overflow-hidden">
+      <ChatHeader roomId={roomId} />
 
-      <div className="flex gap-2 mb-4">
-        <Input
-          placeholder="Type your message..."
-          className="flex-1"
-          ref={inputRef}
-          onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-        />
-        <Button onClick={handleSendMessage}>Send</Button>
-      </div>
-
-      <div className="space-y-2 max-h-96 overflow-y-auto p-4 rounded border">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-background to-background/95 p-4 space-y-4">
         {messages.length === 0 ? (
-          <p className="text-gray-500 italic">No messages yet. Be the first!</p>
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground text-center">
+              No messages yet. Start the conversation!
+            </p>
+          </div>
         ) : (
           messages.map((message) => (
             <div
               key={message.id}
-              className={`p-3 rounded-lg shadow-sm border-l-4 ${
-                message.isSending
-                  ? "border-yellow-500 opacity-50"
-                  : "border-blue-500"
-              }`}
+              className="flex gap-3 mb-4 animate-in fade-in"
             >
-              <small className="text-xs text-gray-500">
-                {message.username}
-              </small>
-              <p>{message.content}</p>
-              <small className="text-gray-500">
-                {new Date(message.created_at).toLocaleTimeString()}
-                {message.isSending && " (sending...)"}
-              </small>
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-xs font-semibold text-primary">
+                    {message.username?.[0]?.toUpperCase() || "U"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-sm text-foreground">
+                    {message.username}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(message.created_at).toLocaleTimeString()}
+                  </span>
+                </div>
+                <p className="text-sm text-foreground break-words bg-card/50 rounded-lg p-2.5 border border-border/50">
+                  {message.content}
+                </p>
+              </div>
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Message Input */}
+      <div className="border-t border-border bg-card p-4">
+        <div className="flex gap-2 max-w-4xl mx-auto">
+          <Input
+            placeholder="Type a message..."
+            className="flex-1"
+            ref={inputRef}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            disabled={isSending}
+          />
+          <Button
+            onClick={handleSendMessage}
+            disabled={isSending}
+            size="icon"
+            className="flex-shrink-0"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          {isConnected ? (
+            <span className="text-green-600">Connected</span>
+          ) : (
+            <span className="text-destructive">Reconnecting...</span>
+          )}
+        </p>
       </div>
     </div>
   );

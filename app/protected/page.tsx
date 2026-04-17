@@ -1,34 +1,14 @@
-import { redirect } from "next/navigation";
-
-import { createClient } from "@/lib/supabase/server";
-import { InfoIcon } from "lucide-react";
-
-import { Suspense } from "react";
-import RoomButton from "@/components/room-button";
-
-async function UserDetails() {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-
-  if (error || !data?.claims) {
-    redirect("/auth/login");
-  }
-
-  return JSON.stringify(data.claims, null, 2);
-}
-
 export default function ProtectedPage() {
   return (
-    <div className="flex-1 w-full flex flex-col  items-center ">
-      <div className="flex flex-col gap-2 items-center  w-full">
-        <h2 className="font-bold text-2xl">Your user details</h2>
-        <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto bg-transparent backdrop-blur-lg max-[460px]:w-[75%]">
-          <Suspense>
-            <UserDetails />
-          </Suspense>
-        </pre>
-        <h2 className="font-bold text-2xl mt-4">Chat Safely</h2>
-        <RoomButton />
+    <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <div className="text-center space-y-4">
+        <h2 className="text-3xl font-bold text-foreground">Welcome to ChatSafe</h2>
+        <p className="text-muted-foreground text-lg max-w-md">
+          Select a group from the sidebar to start chatting, or create a new group to begin conversations with your friends.
+        </p>
+        <div className="pt-6">
+          <p className="text-sm text-muted-foreground">Use the Create or Join buttons to get started.</p>
+        </div>
       </div>
     </div>
   );
